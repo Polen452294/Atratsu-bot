@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app.api.routes import deals_router, lots_router, matches_router
+from app.api.routes import deals_router, exports_router, lots_router, matches_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 
@@ -23,6 +23,7 @@ app = FastAPI(
 app.include_router(lots_router)
 app.include_router(matches_router)
 app.include_router(deals_router)
+app.include_router(exports_router)
 
 
 @app.get("/health")
