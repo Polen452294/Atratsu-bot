@@ -1,11 +1,11 @@
 import asyncio
 
 from aiogram import Bot, Dispatcher
+from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import TelegramObject
-from aiogram.dispatcher.middlewares.base import BaseMiddleware
 
-from app.bot.handlers import lot_create_router, matches_router, start_router
+from app.bot.handlers import lot_create_router, matches_router, my_lots_router, start_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.session import AsyncSessionLocal
@@ -29,6 +29,7 @@ async def main() -> None:
     dp.include_router(start_router)
     dp.include_router(lot_create_router)
     dp.include_router(matches_router)
+    dp.include_router(my_lots_router)
 
     await dp.start_polling(bot)
 

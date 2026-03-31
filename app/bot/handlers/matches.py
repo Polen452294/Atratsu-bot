@@ -2,7 +2,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.texts.messages import MATCH_SELECTED
+from app.bot.keyboards.lots import deal_actions_keyboard
+from app.bot.texts.messages import DEAL_INITIATED, MATCH_SELECTED
 from app.repositories.carrier_match import CarrierMatchRepository
 from app.repositories.deal import DealRepository
 from app.repositories.lot import LotRepository
@@ -43,6 +44,35 @@ async def cb_select_match(
     await callback.message.answer(
         f"{MATCH_SELECTED}\n\n"
         f"Deal ID: {deal.id}\n"
-        f"Сообщение перевозчику:\n{deal.initiated_message}"
+        f"Сообщение перевозчику:\n{deal.initiated_message}",
+        reply_markup=deal_actions_keyboard(deal.id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("deal:initiate:"))
+async def cb_initiate_deal(
+    callback: CallbackQuery,
+    session: AsyncSession,
+) -> None:
+    deal_id = int(callback.data.split(":")[-1])
+
+    service = DealService(
+        lot_repository=LotRepository(session),
+        carrier_match_repository=CarrierMatchRepository(session),
+        deal_repository=DealRepository(session),
+    )
+
+    deal = await service.initiate_deal(deal_id)
+
+    if deal is None:
+        await callback.message.answer("Сделка не найдена.")
+        await callback.answer()
+        return
+
+    await callback.message.answer(
+        f"{DEAL_INITIATED}\n\n"
+        f"Deal ID: {deal.id}\n"
+        f"Статус: {deal.status}"
     )
     await callback.answer()

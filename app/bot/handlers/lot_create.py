@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards.common import cancel_keyboard, confirm_lot_keyboard
-from app.bot.keyboards.matches import matches_keyboard
+from app.bot.keyboards.matches import matches_with_export_keyboard
 from app.bot.states.lot import LotCreationStates
 from app.bot.texts.messages import (
     ASK_BUDGET,
@@ -18,6 +18,7 @@ from app.bot.texts.messages import (
     ASK_VEHICLE_TYPE,
     ASK_VOLUME,
     ASK_WEIGHT,
+    EMPTY_VALUE,
     INVALID_DATETIME,
     INVALID_NUMBER,
     LOT_CANCELLED,
@@ -48,6 +49,13 @@ async def _build_search_service(session: AsyncSession) -> SearchService:
     )
 
 
+def _text_or_empty(message: Message) -> str | None:
+    if message.text is None:
+        return None
+    text = message.text.strip()
+    return text or None
+
+
 @router.message(F.text == "/lot")
 async def cmd_lot(message: Message, state: FSMContext) -> None:
     await state.clear()
@@ -72,23 +80,38 @@ async def cb_cancel_lot(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(LotCreationStates.route_from)
 async def process_route_from(message: Message, state: FSMContext) -> None:
-    await state.update_data(route_from=message.text.strip())
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
+    await state.update_data(route_from=text)
     await state.set_state(LotCreationStates.route_to)
     await message.answer(ASK_ROUTE_TO, reply_markup=cancel_keyboard())
 
 
 @router.message(LotCreationStates.route_to)
 async def process_route_to(message: Message, state: FSMContext) -> None:
-    await state.update_data(route_to=message.text.strip())
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
+    await state.update_data(route_to=text)
     await state.set_state(LotCreationStates.distance_km)
     await message.answer(ASK_DISTANCE, reply_markup=cancel_keyboard())
 
 
 @router.message(LotCreationStates.distance_km)
 async def process_distance(message: Message, state: FSMContext) -> None:
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
     try:
-        distance_km = int(message.text.strip())
-    except (TypeError, ValueError):
+        distance_km = int(text)
+    except ValueError:
         await message.answer(INVALID_NUMBER)
         return
 
@@ -99,8 +122,13 @@ async def process_distance(message: Message, state: FSMContext) -> None:
 
 @router.message(LotCreationStates.deadline_at)
 async def process_deadline(message: Message, state: FSMContext) -> None:
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
     try:
-        deadline_at = datetime.strptime(message.text.strip(), "%Y-%m-%d %H:%M")
+        deadline_at = datetime.strptime(text, "%Y-%m-%d %H:%M")
     except ValueError:
         await message.answer(INVALID_DATETIME)
         return
@@ -112,16 +140,26 @@ async def process_deadline(message: Message, state: FSMContext) -> None:
 
 @router.message(LotCreationStates.vehicle_type)
 async def process_vehicle_type(message: Message, state: FSMContext) -> None:
-    await state.update_data(vehicle_type=message.text.strip())
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
+    await state.update_data(vehicle_type=text)
     await state.set_state(LotCreationStates.weight_tons)
     await message.answer(ASK_WEIGHT, reply_markup=cancel_keyboard())
 
 
 @router.message(LotCreationStates.weight_tons)
 async def process_weight(message: Message, state: FSMContext) -> None:
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
     try:
-        weight_tons = Decimal(message.text.strip().replace(",", "."))
-    except (InvalidOperation, AttributeError):
+        weight_tons = Decimal(text.replace(",", "."))
+    except InvalidOperation:
         await message.answer(INVALID_NUMBER)
         return
 
@@ -132,11 +170,14 @@ async def process_weight(message: Message, state: FSMContext) -> None:
 
 @router.message(LotCreationStates.volume_m3)
 async def process_volume(message: Message, state: FSMContext) -> None:
-    text = message.text.strip().replace(",", ".")
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
 
     try:
-        volume = Decimal(text)
-    except (InvalidOperation, AttributeError):
+        volume = Decimal(text.replace(",", "."))
+    except InvalidOperation:
         await message.answer(INVALID_NUMBER)
         return
 
@@ -149,9 +190,14 @@ async def process_volume(message: Message, state: FSMContext) -> None:
 
 @router.message(LotCreationStates.budget_rub)
 async def process_budget(message: Message, state: FSMContext) -> None:
+    text = _text_or_empty(message)
+    if text is None:
+        await message.answer(EMPTY_VALUE)
+        return
+
     try:
-        budget_rub = Decimal(message.text.strip().replace(",", "."))
-    except (InvalidOperation, AttributeError):
+        budget_rub = Decimal(text.replace(",", "."))
+    except InvalidOperation:
         await message.answer(INVALID_NUMBER)
         return
 
@@ -211,14 +257,16 @@ async def cb_confirm_lot(
         return
 
     text = _format_matches(LotRead.model_validate(lot), matches)
-    markup = matches_keyboard([item.id for item in matches])
+    markup = matches_with_export_keyboard(lot.id, [item.id for item in matches])
     await callback.message.answer(text, reply_markup=markup)
 
 
 def _format_matches(lot: LotRead, matches) -> str:
     lines = [
         f"Лот #{lot.id}",
-        f"{lot.route_from} -> {lot.route_to}",
+        f"Маршрут: {lot.route_from} -> {lot.route_to}",
+        f"Тип ТС: {lot.vehicle_type}",
+        f"Бюджет: {lot.budget_rub} ₽",
         "",
         "Найденные варианты:",
         "",
