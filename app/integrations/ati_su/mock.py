@@ -1,3 +1,4 @@
+import random
 from datetime import timedelta
 from decimal import Decimal
 
@@ -6,88 +7,46 @@ from app.domain.schemas.lot import LotRead
 
 
 class MockAtiSuProvider:
-    async def search_carriers(self, lot: LotRead) -> list[CarrierCandidate]:
-        deadline = lot.deadline_at
+    def __init__(self, mode: str = "normal") -> None:
+        self.mode = mode
 
+    async def search_carriers(self, lot: LotRead) -> list[CarrierCandidate]:
+        if self.mode == "empty":
+            return []
+
+        if self.mode == "bad_prices":
+            return self._generate_bad_price_candidates(lot)
+
+        return self._generate_normal_candidates(lot)
+
+    def _generate_normal_candidates(self, lot: LotRead):
         return [
-            CarrierCandidate(
-                provider="mock_ati_su",
-                external_carrier_id="carrier_001",
-                carrier_name='ООО "ТрансЛайн"',
-                contact_phone="+7 900 111-11-11",
-                contact_nick="@transline",
-                rating=Decimal("4.80"),
-                proposed_price=Decimal("65000"),
-                vehicle_type=lot.vehicle_type,
-                available_at=deadline - timedelta(hours=8),
-                route_comment=f"{lot.route_from} -> {lot.route_to}",
-                raw_payload={
-                    "source": "mock",
-                    "position": 1,
-                },
-            ),
-            CarrierCandidate(
-                provider="mock_ati_su",
-                external_carrier_id="carrier_002",
-                carrier_name='ИП "ГрузЭкспресс"',
-                contact_phone="+7 900 222-22-22",
-                contact_nick="@gruzexpress",
-                rating=Decimal("4.55"),
-                proposed_price=Decimal("68000"),
-                vehicle_type=lot.vehicle_type,
-                available_at=deadline - timedelta(hours=5),
-                route_comment=f"{lot.route_from} -> {lot.route_to}",
-                raw_payload={
-                    "source": "mock",
-                    "position": 2,
-                },
-            ),
-            CarrierCandidate(
-                provider="mock_ati_su",
-                external_carrier_id="carrier_003",
-                carrier_name='ООО "Север Логистик"',
-                contact_phone="+7 900 333-33-33",
-                contact_nick="@severlog",
-                rating=Decimal("4.20"),
-                proposed_price=Decimal("70000"),
-                vehicle_type=lot.vehicle_type,
-                available_at=deadline - timedelta(hours=2),
-                route_comment=f"{lot.route_from} -> {lot.route_to}",
-                raw_payload={
-                    "source": "mock",
-                    "position": 3,
-                },
-            ),
-            CarrierCandidate(
-                provider="mock_ati_su",
-                external_carrier_id="carrier_004",
-                carrier_name='ООО "Магистраль"',
-                contact_phone="+7 900 444-44-44",
-                contact_nick="@magistral",
-                rating=Decimal("4.90"),
-                proposed_price=Decimal("72000"),
-                vehicle_type=lot.vehicle_type,
-                available_at=deadline - timedelta(hours=10),
-                route_comment=f"{lot.route_from} -> {lot.route_to}",
-                raw_payload={
-                    "source": "mock",
-                    "position": 4,
-                },
-            ),
-            CarrierCandidate(
-                provider="mock_ati_su",
-                external_carrier_id="carrier_005",
-                carrier_name='ООО "ЮгТранс"',
-                contact_phone="+7 900 555-55-55",
-                contact_nick="@yugtrans",
-                rating=Decimal("3.90"),
-                proposed_price=Decimal("61000"),
-                vehicle_type="тент" if lot.vehicle_type != "тент" else lot.vehicle_type,
-                available_at=deadline - timedelta(hours=6),
-                route_comment=f"{lot.route_from} -> {lot.route_to}",
-                raw_payload={
-                    "source": "mock",
-                    "position": 5,
-                },
-            ),
+            self._build_candidate(lot, i)
+            for i in range(random.randint(3, 7))
         ]
+
+    def _generate_bad_price_candidates(self, lot: LotRead):
+        candidates = []
+        for i in range(5):
+            candidate = self._build_candidate(lot, i)
+            candidate.proposed_price = lot.budget_rub + Decimal("10000")
+            candidates.append(candidate)
+        return candidates
+
+    def _build_candidate(self, lot: LotRead, idx: int) -> CarrierCandidate:
+        price = Decimal(random.randint(50000, 90000))
+        rating = Decimal(str(round(random.uniform(3.5, 5.0), 2)))
+
+        return CarrierCandidate(
+            provider="mock_ati",
+            external_carrier_id=f"carrier_{idx}",
+            carrier_name=f"Перевозчик #{idx}",
+            contact_phone=f"+7 900 000-00-{idx:02d}",
+            contact_nick=f"@carrier{idx}",
+            rating=rating,
+            proposed_price=price,
+            vehicle_type=lot.vehicle_type,
+            available_at=lot.deadline_at - timedelta(hours=random.randint(1, 10)),
+            route_comment=f"{lot.route_from}->{lot.route_to}",
+            raw_payload={"mock": True},
+        )

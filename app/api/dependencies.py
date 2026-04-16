@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import get_db_session
 from app.integrations.ati_su.mock import MockAtiSuProvider
+from app.integrations.ati_su.factory import get_ati_provider
 from app.repositories.carrier_match import CarrierMatchRepository
 from app.repositories.deal import DealRepository
 from app.repositories.export_file import ExportFileRepository
@@ -28,19 +29,12 @@ async def get_lot_service(
     return LotService(repository)
 
 
-async def get_search_service(
-    session: AsyncSession,
-) -> SearchService:
-    lot_repository = LotRepository(session)
-    carrier_match_repository = CarrierMatchRepository(session)
-    matching_service = MatchingService()
-    provider = MockAtiSuProvider()
-
+async def get_search_service(session: AsyncSession) -> SearchService:
     return SearchService(
-        lot_repository=lot_repository,
-        carrier_match_repository=carrier_match_repository,
-        matching_service=matching_service,
-        provider=provider,
+        lot_repository=LotRepository(session),
+        carrier_match_repository=CarrierMatchRepository(session),
+        matching_service=MatchingService(),
+        provider=get_ati_provider(),
     )
 
 
